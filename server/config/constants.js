@@ -8,5 +8,6 @@ module.exports = {
     CORRECT_TOP10: 3
   },
   F1_POINTS_TABLE: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+  SPRINT_POINTS_TABLE: [8, 7, 6, 5, 4, 3, 2, 1],
   MONTE_CARLO_ITERATIONS: 10000
 };

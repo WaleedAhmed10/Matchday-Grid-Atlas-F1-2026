@@ -1,4 +1,4 @@
-const { F1_POINTS_TABLE } = require('../config/constants');
+const { F1_POINTS_TABLE, SPRINT_POINTS_TABLE } = require('../config/constants');
 
 /**
  * Official F1 points allocation (positions 1-10).
@@ -7,6 +7,11 @@ const { F1_POINTS_TABLE } = require('../config/constants');
 function getPointsForPosition(position) {
   if (position < 1 || position > F1_POINTS_TABLE.length) return 0;
   return F1_POINTS_TABLE[position - 1];
+}
+
+function getSprintPointsForPosition(position) {
+  if (position < 1 || position > SPRINT_POINTS_TABLE.length) return 0;
+  return SPRINT_POINTS_TABLE[position - 1];
 }
 
 /**
@@ -43,6 +48,12 @@ function calculateDriverStandings(drivers, raceResults) {
       entry.races += 1;
       if (position === 1) entry.wins += 1;
       if (position <= 3) entry.podiums += 1;
+    });
+
+    // Sprint weekends also award points (8-7-6-5-4-3-2-1); they don't count as wins/podiums
+    (result.sprintOrder || []).forEach((driverId, index) => {
+      const entry = standings.get(driverId);
+      if (entry) entry.points += getSprintPointsForPosition(index + 1);
     });
   });
 
@@ -85,6 +96,7 @@ function calculateConstructorStandings(drivers, raceResults) {
 
 module.exports = {
   getPointsForPosition,
+  getSprintPointsForPosition,
   calculateDriverStandings,
   calculateConstructorStandings,
   compareDriverStandings,

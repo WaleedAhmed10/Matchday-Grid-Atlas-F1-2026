@@ -1,71 +1,124 @@
-const crypto = require('crypto');
 const User = require('../models/User');
 const Leaderboard = require('../models/Leaderboard');
-const { asyncHandler, ConflictError, ValidationError } = require('../middleware/errorHandler');
+const {
+  asyncHandler,
+  ConflictError,
+  ValidationError,
+  AuthenticationError
+} = require('../middleware/errorHandler');
 const { sendSuccess } = require('../utils/response');
+const { hashPassword, verifyPassword } = require('../utils/password');
+const { createSessionToken, isExpired, safeEqual, MAX_SESSIONS } = require('../utils/session');
+
+const MIN_PASSWORD = 6;
+const MAX_PASSWORD = 128; // scrypt cost grows with input size, so cap it
+
+// Usernames are matched case-insensitively ("Max" and "max" are the same person).
+const findByUsername = (username) =>
+  User.findOne({ username }).collation({ locale: 'en', strength: 2 });
+
+function cleanCredentials(body = {}) {
+  const username = typeof body.username === 'string' ? body.username.trim() : '';
+  const password = typeof body.password === 'string' ? body.password : '';
+  return { username, password };
+}
+
+function validatePassword(password) {
+  if (password.length < MIN_PASSWORD) {
+    throw new ValidationError(`Password must be at least ${MIN_PASSWORD} characters`);
+  }
+  if (password.length > MAX_PASSWORD) {
+    throw new ValidationError(`Password must be at most ${MAX_PASSWORD} characters`);
+  }
+}
+
+const publicUser = (user) => ({ username: user.username, displayName: user.displayName });
+
+/** Start a session for this device; returns the (unhashed) token for the client. */
+function startSession(user) {
+  const { token, hash } = createSessionToken();
+  const live = (user.sessions || []).filter((s) => !isExpired(s));
+  user.sessions = [...live.slice(-(MAX_SESSIONS - 1)), { hash, createdAt: new Date() }];
+  return token;
+}
 
 /**
- * User signup - username only, no password needed
+ * User signup - username + password
  */
 exports.signup = asyncHandler(async (req, res) => {
-  const { username, displayName } = req.body;
+  const { username, password } = cleanCredentials(req.body);
+  const displayName = (typeof req.body.displayName === 'string' && req.body.displayName.trim()) || username;
 
-  if (!username || username.trim().length < 3) {
+  if (username.length < 3) {
     throw new ValidationError('Username must be at least 3 characters');
   }
+  if (username.length > 30) {
+    throw new ValidationError('Username must be at most 30 characters');
+  }
+  validatePassword(password);
 
-  const existing = await User.findOne({ username });
-  if (existing) {
+  if (await findByUsername(username)) {
     throw new ConflictError('Username already taken');
   }
 
-  const finalDisplayName = displayName || username;
-  const token = crypto.randomBytes(16).toString('hex');
-
-  const user = await User.create({
+  const user = new User({
     username,
-    displayName: finalDisplayName,
-    token
+    displayName,
+    passwordHash: await hashPassword(password)
   });
+  const token = startSession(user);
+  await user.save();
 
-  await Leaderboard.create({
-    user: username,
-    points: 0,
-    correctWinners: 0,
-    displayName: finalDisplayName
-  });
+  try {
+    await Leaderboard.create({ user: user.username, points: 0, correctWinners: 0, displayName });
+  } catch (err) {
+    // Don't leave a half-created account behind that can't be signed up again
+    await User.deleteOne({ _id: user._id });
+    throw err;
+  }
 
-  sendSuccess(
-    res,
-    {
-      token,
-      user: { username: user.username, displayName: user.displayName }
-    },
-    'Account created',
-    201
-  );
+  sendSuccess(res, { token, user: publicUser(user) }, 'Account created', 201);
 });
 
 /**
- * User signin - just username, no password
+ * User signin - username + password
  */
 exports.signin = asyncHandler(async (req, res) => {
-  const { username } = req.body;
+  const { username, password } = cleanCredentials(req.body);
 
-  if (!username) {
-    throw new ValidationError('Username required');
+  if (!username || !password) {
+    throw new ValidationError('Username and password are required');
   }
 
-  let user = await User.findOne({ username });
-
+  const user = await findByUsername(username);
   if (!user) {
-    throw new ValidationError('Username not found. Sign up first.');
+    throw new AuthenticationError('Invalid username or password');
   }
 
-  sendSuccess(res, {
-    token: user.token,
-    user: { username: user.username, displayName: user.displayName }
-  }, 'Logged in');
+  let message = 'Logged in';
+
+  if (!user.passwordHash) {
+    // Account created before passwords existed. Only its owner may set the first password:
+    // the browser it was created in still holds the old token. (The site owner can allow
+    // anyone to claim old accounts with ALLOW_LEGACY_CLAIM=true.)
+    const ownsAccount = typeof req.body.legacyToken === 'string' && user.token && safeEqual(req.body.legacyToken, user.token);
+    if (!ownsAccount && process.env.ALLOW_LEGACY_CLAIM !== 'true') {
+      throw new AuthenticationError(
+        'This older account has no password yet. Sign in from the browser you created it on, or ask the site owner to reset it.'
+      );
+    }
+    validatePassword(password);
+    user.passwordHash = await hashPassword(password);
+    user.token = undefined; // retire the old plain-text token
+    message = 'Password set for your account';
+  } else if (!(await verifyPassword(password, user.passwordHash))) {
+    throw new AuthenticationError('Invalid username or password');
+  }
+
+  const token = startSession(user);
+  await user.save();
+
+  sendSuccess(res, { token, user: publicUser(user) }, message);
 });
 
 /**
@@ -76,5 +129,17 @@ exports.me = asyncHandler((req, res) => {
     throw new AuthenticationError();
   }
 
-  sendSuccess(res, { user: req.user }, 'User information retrieved');
+  sendSuccess(res, { user: { username: req.user.username, displayName: req.user.displayName } }, 'User information retrieved');
+});
+
+/**
+ * Sign out this device (invalidates its token on the server)
+ */
+exports.signout = asyncHandler(async (req, res) => {
+  const user = await User.findOne({ username: req.user.username }).collation({ locale: 'en', strength: 2 });
+  if (user) {
+    user.sessions = (user.sessions || []).filter((s) => s.hash !== req.user.sessionHash);
+    await user.save();
+  }
+  sendSuccess(res, {}, 'Signed out');
 });

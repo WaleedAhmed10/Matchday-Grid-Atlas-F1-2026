@@ -148,7 +148,7 @@ function calculateWeatherImpact(driver, weather, weatherFactor = 1.0) {
 
   // Wet weather specialists typically score higher in rain
   const wetSpecialists = ['VER', 'HAM', 'ALO']; // Example codes
-  const dryspecialists = ['LEC', 'SAI', 'NOR'];
+  const drySpecialists = ['LEC', 'SAI', 'NOR'];
 
   if (weather.type === 'rain' && weatherFactor > 1.0) {
     score = wetSpecialists.includes(driver.code) ? 65 : 45;
@@ -193,18 +193,17 @@ function convertScoresToProbabilities(predictions) {
 
   return predictions.map((prediction) => {
     const winProbability = (prediction.predictedScore / totalScore) * 100;
-    const podiumProbability = Math.max(
-      (prediction.predictedScore / totalScore) * 150, // Adjusted for podium
-      50
-    );
+    // Three drivers share a podium, so podium chances add up to 300% across the field
+    const podiumProbability = Math.min(100, (prediction.predictedScore / totalScore) * 300);
 
     return {
       ...prediction,
       winProbability: Math.round(winProbability * 100) / 100,
       podiumProbability: Math.round(podiumProbability * 100) / 100,
-      predictedPosition: Math.max(1, Math.round(21 - (prediction.predictedScore / 100) * 20))
     };
-  }).sort((a, b) => b.winProbability - a.winProbability);
+  })
+    .sort((a, b) => b.winProbability - a.winProbability)
+    .map((prediction, index) => ({ ...prediction, predictedPosition: index + 1 }));
 }
 
 /**

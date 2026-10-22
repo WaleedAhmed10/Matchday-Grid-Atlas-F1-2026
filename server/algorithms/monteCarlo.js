@@ -1,4 +1,4 @@
-const { getPointsForPosition } = require('./f1Points');
+const { getPointsForPosition, calculateDriverStandings } = require('./f1Points');
 const { MONTE_CARLO_ITERATIONS } = require('../config/constants');
 
 /**
@@ -46,13 +46,8 @@ function simulateChampionship(drivers, raceResults, remainingRaceIds, iterations
 }
 
 function buildCurrentPoints(drivers, raceResults) {
-  const points = Object.fromEntries(drivers.map((d) => [d.id, 0]));
-  raceResults.forEach((result) => {
-    result.finishingOrder.forEach((driverId, idx) => {
-      points[driverId] = (points[driverId] || 0) + getPointsForPosition(idx + 1);
-    });
-  });
-  return points;
+  // Same numbers as the standings table (race + sprint points)
+  return Object.fromEntries(calculateDriverStandings(drivers, raceResults).map((s) => [s.driverId, s.points]));
 }
 
 /**

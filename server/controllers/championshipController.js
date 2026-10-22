@@ -10,7 +10,9 @@ const {
 } = require('../algorithms/f1Points');
 const { simulateChampionship } = require('../algorithms/monteCarlo');
 const { recalculateLeaderboard } = require('../services/leaderboardService');
-const { asyncHandler, NotFoundError } = require('../middleware/errorHandler');
+const { asyncHandler, NotFoundError, ValidationError } = require('../middleware/errorHandler');
+const { maybeSync, getSyncStatus } = require('../services/resultsSync');
+const { isAdmin } = require('../middleware/auth');
 const { sendSuccess, sendPaginated } = require('../utils/response');
 const { cache, cacheKeys, invalidationPatterns } = require('../utils/cache');
 const { logger } = require('../utils/logger');
@@ -103,15 +105,23 @@ exports.submitRaceResult = asyncHandler(async (req, res) => {
   const { raceId, finishingOrder } = req.body;
 
   if (!Array.isArray(finishingOrder) || finishingOrder.length < 1) {
-    throw new Error('finishingOrder must be a non-empty array of driver IDs');
+    throw new ValidationError('finishingOrder must be a non-empty array of driver IDs');
   }
 
   const race = await Race.findOne({ id: raceId });
   if (!race) throw new NotFoundError('Race');
 
+  const knownDrivers = new Set((await Driver.find({}, { id: 1 })).map((d) => d.id));
+  const unknown = finishingOrder.filter((id) => !knownDrivers.has(id));
+  if (unknown.length || new Set(finishingOrder).size !== finishingOrder.length) {
+    throw new ValidationError(
+      unknown.length ? `Unknown driver id(s): ${unknown.join(', ')}` : 'finishingOrder contains duplicate drivers'
+    );
+  }
+
   const result = await RaceResult.findOneAndUpdate(
     { raceId },
-    { finishingOrder, recordedAt: new Date() },
+    { finishingOrder, source: 'manual', recordedAt: new Date() },
     { upsert: true, new: true }
   );
 
@@ -122,6 +132,14 @@ exports.submitRaceResult = asyncHandler(async (req, res) => {
   await recalculateLeaderboard();
 
   sendSuccess(res, result, 'Race result submitted successfully', 201);
+});
+
+/**
+ * Pull the latest official results now (admin)
+ */
+exports.syncResultsNow = asyncHandler(async (req, res) => {
+  const summary = await maybeSync({ force: true });
+  sendSuccess(res, { summary, status: getSyncStatus() }, summary?.error ? 'Sync failed' : 'Sync complete');
 });
 
 /**
@@ -148,12 +166,15 @@ exports.getRaceResults = asyncHandler(async (req, res) => {
 exports.exportData = asyncHandler(async (req, res) => {
   const startTime = Date.now();
 
+  // Regular users export public data plus their own predictions. Admins also get the user list.
+  // Tokens, sessions and password hashes are never exported.
+  const admin = isAdmin(req.user?.username);
   const [drivers, races, predictions, leaderboard, users, raceResults] = await Promise.all([
     Driver.find({}, { _id: 0, __v: 0 }),
     Race.find({}, { _id: 0, __v: 0 }),
-    Prediction.find({}, { _id: 0, __v: 0 }),
+    Prediction.find(admin ? {} : { userName: req.user.username }, { _id: 0, __v: 0 }),
     Leaderboard.find({}, { _id: 0, __v: 0 }),
-    User.find({}, { _id: 0, password: 0, __v: 0 }),
+    admin ? User.find({}, { _id: 0, username: 1, displayName: 1, joined: 1 }) : Promise.resolve([]),
     RaceResult.find({}, { _id: 0, __v: 0 })
   ]);
 
@@ -249,17 +270,20 @@ exports.getRacePredictions = asyncHandler(async (req, res) => {
   const { raceId } = req.params;
   const { weather } = req.query;
 
-  const race = await Race.findOne({ id: raceId });
+  const race = await Race.findOne({ id: Number(raceId) });
   if (!race) throw new NotFoundError('Race');
 
   const drivers = await Driver.find({});
   const raceResults = await RaceResult.find({}).sort({ raceId: 1 });
 
   const weatherFactor = weather === 'rain' ? 1.2 : weather === 'clear' ? 0.8 : 1.0;
-  const predictions = predictRaceOutcome(drivers, raceResults, race, weatherFactor);
+  const raceInfo = weather === 'rain' || weather === 'clear'
+    ? { ...race.toObject(), weather: { type: weather } }
+    : race;
+  const predictions = predictRaceOutcome(drivers, raceResults, raceInfo, weatherFactor);
 
   const response = {
-    raceId,
+    raceId: Number(raceId),
     raceName: race.name,
     predictions,
     generatedAt: new Date().toISOString()

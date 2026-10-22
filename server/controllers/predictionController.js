@@ -35,6 +35,10 @@ exports.createOrUpdate = async (req, res) => {
     const { raceId, driverId } = req.body;
     const userName = req.user.username;
 
+    if (!Number.isInteger(raceId) || typeof driverId !== 'string') {
+      return res.status(400).json({ error: 'raceId must be a number and driverId a string' });
+    }
+
     const race = await Race.findOne({ id: raceId });
     if (!race) return res.status(404).json({ error: 'Race not found' });
     if (!isRaceOpenForPredictions(race)) {

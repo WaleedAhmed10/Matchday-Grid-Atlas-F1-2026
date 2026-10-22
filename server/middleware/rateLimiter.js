@@ -76,9 +76,9 @@ const limiter = new RateLimiter();
  * General rate limiting middleware
  * 100 requests per minute per IP/user
  */
-function rateLimitMiddleware(limit = 100, windowMs = 60000) {
+function rateLimitMiddleware(limit = 100, windowMs = 60000, scope = 'api') {
   return (req, res, next) => {
-    const key = limiter.getKey(req);
+    const key = `${scope}:${limiter.getKey(req)}`;
     const check = limiter.isAllowed(key, limit, windowMs);
 
     res.set('X-RateLimit-Limit', limit);
@@ -95,10 +95,10 @@ function rateLimitMiddleware(limit = 100, windowMs = 60000) {
 
 /**
  * Strict rate limiting for auth endpoints
- * 5 attempts per minute per IP
+ * 10 attempts per minute per IP (separate bucket from the general API limit)
  */
 function authRateLimit() {
-  return rateLimitMiddleware(5, 60000);
+  return rateLimitMiddleware(10, 60000, 'auth');
 }
 
 /**
@@ -106,7 +106,7 @@ function authRateLimit() {
  * 100 requests per minute per user
  */
 function apiRateLimit() {
-  return rateLimitMiddleware(100, 60000);
+  return rateLimitMiddleware(100, 60000, 'api');
 }
 
 /**
@@ -114,7 +114,7 @@ function apiRateLimit() {
  * 50 predictions per hour per user
  */
 function predictionRateLimit() {
-  return rateLimitMiddleware(50, 3600000);
+  return rateLimitMiddleware(50, 3600000, 'predict');
 }
 
 module.exports = {

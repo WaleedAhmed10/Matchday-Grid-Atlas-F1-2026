@@ -85,6 +85,13 @@ function responseFormatter(req, res, next) {
       return originalJson.call(this, data);
     }
 
+    // Error responses (4xx/5xx) must keep their `{ error }` body as-is. Wrapping
+    // them as a "success" payload hid every real error message from the client
+    // (it showed the generic "API request failed" instead).
+    if (this.statusCode >= 400) {
+      return originalJson.call(this, data);
+    }
+
     // Format as success response
     const formatted = successResponse(data);
     res.status(res.statusCode || 200);

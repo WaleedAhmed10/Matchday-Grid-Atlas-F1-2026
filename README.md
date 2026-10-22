@@ -4,7 +4,7 @@ A full-stack web app for predicting Formula 1 2026 race outcomes and championshi
 
 ## Features
 
-- Submit race-by-race predictions (winner + top 3) with a simple username-based login
+- Submit race-by-race predictions (winner + top 3) with a username + password account
 - Live driver and constructor championship standings
 - Weighted race-outcome predictor (historical performance, form, circuit fit, weather, qualifying)
 - Monte Carlo simulation (10,000 runs) for championship win probabilities
@@ -26,7 +26,7 @@ Keep the CSV headers unchanged.
 
 **Backend:** Node.js, Express, MongoDB, Mongoose
 
-No JWT/bcrypt — auth uses a simple random token tied to each user.
+Auth: username + password (hashed with Node's built-in scrypt, no extra dependency). Every sign-in creates a random session token for that device (sent as `Authorization: Bearer <token>`); only its SHA-256 hash is stored, it expires after 30 days (`SESSION_DAYS`) and signing out invalidates it on the server. Accounts created before passwords existed can set their password by signing in from the browser they were created in; the site owner can allow anyone to claim old accounts with `ALLOW_LEGACY_CLAIM=true`.
 
 ## Project Structure
 
@@ -75,15 +75,12 @@ F1-2026-GP-Season-Calculator/
 ```
 POST /api/auth/signup
 POST /api/auth/signin
+POST /api/auth/signout
 GET  /api/auth/me
 
 GET  /api/drivers
-GET  /api/drivers/:id
-GET  /api/drivers/:id/stats
 
 GET  /api/races
-GET  /api/races/:id
-POST /api/races/:id/result          (admin)
 
 GET    /api/predictions
 POST   /api/predictions
@@ -91,11 +88,17 @@ DELETE /api/predictions
 
 GET /api/leaderboard
 
+POST /api/championship/results      (admin: enter/correct a result by hand)
+POST /api/championship/sync         (admin: pull the latest results now)
+
 GET /api/championship/drivers
 GET /api/championship/constructors
 GET /api/championship/simulation
-GET /api/championship/races/:id/predictions
+GET /api/championship/races/:id/predictions[?weather=rain|clear]
+GET /api/championship/drivers/:id/stats
 GET /api/championship/drivers/:id/compare/:id2
+GET /api/championship/teams/:team/stats
+GET /api/export                     (your data; admins also get the user list)
 ```
 
 ## Installation
@@ -114,6 +117,33 @@ cd client
 npm install
 npm start                  # starts on port 5173
 ```
+
+## Automatic points updates
+
+Everything that shows points (driver & constructor standings, the simulation, the Predict tab's
+driver list and the player leaderboard) is calculated from the stored race results. The backend
+pulls the official classification, including sprints, from the free Jolpica F1 API:
+
+- when the server starts and then every 30 minutes (`RESULTS_SYNC_INTERVAL_MIN`)
+- whenever standings/leaderboard are requested (throttled to once per 10 minutes), so it also
+  works on hosts that put idle servers to sleep
+- on demand: `POST /api/championship/sync` as an admin
+
+`datasets/races.csv` follows the real 2026 calendar (23 rounds, in date order). Predictions close at 00:00 UTC on race day.
+Races are matched to `datasets/races.csv` by circuit (then by date). A round that isn't in the CSV
+is added automatically so its points are not lost. Drivers are matched by their 3-letter code, so
+keep `code` in `datasets/drivers.csv` identical to the official one.
+The frontend re-reads the data every 5 minutes and when you return to the tab.
+
+Set `ADMIN_USERNAMES=yourname` to allow yourself to enter results by hand if the API is down.
+Set `RESULTS_SYNC=off` to disable the sync.
+
+## Deploying
+
+`vercel.json` only builds the frontend. The Express API must be hosted somewhere that can run
+Node (Render, Railway, Fly.io...) with `MONGODB_URI` set. Then build the frontend with
+`VITE_API_URL=https://<your-api-host>/api`; without it the site calls `/api` on its own domain
+and sign-in cannot work.
 
 ## Prediction Algorithm
 
@@ -134,7 +164,7 @@ The Monte Carlo simulation runs the remaining season 10,000 times, using the pre
 
 - Token-based auth on protected routes
 - Input validation and sanitization
-- Rate limiting (5 req/min on auth, 100 req/min general)
+- Rate limiting (10 req/min on sign-in/sign-up, 100 req/min general; set `TRUST_PROXY=1` behind a reverse proxy)
 - Centralized error handling with typed errors (`ValidationError`, `AuthenticationError`, `ConflictError`)
 - CORS restricted to the frontend origin
 
@@ -144,4 +174,4 @@ See [LICENSE](LICENSE).
 
 ## Disclaimer
 
-This tool is for entertainment and analytical purposes. Predictions are based on historical data and statistical models — actual results may differ. Refer to official F1 channels for real standings and results.
+This tool is for entertainment and analytical purposes. Predictions are based on historical data and statistical models — actual results may differ. Refer to official F1 channels for real standings and results.

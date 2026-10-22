@@ -22,9 +22,11 @@ async function recalculateLeaderboard() {
   for (const entry of leaderboardEntries) {
     const userPreds = byUser.get(entry.user) || [];
     const { total, correctWinners } = calculateUserTotalPoints(userPreds, raceResultsMap);
-    entry.points = total;
-    entry.correctWinners = correctWinners;
-    await entry.save();
+    if (entry.points !== total || entry.correctWinners !== correctWinners) {
+      entry.points = total;
+      entry.correctWinners = correctWinners;
+      await entry.save();
+    }
   }
 
   return rankLeaderboard(

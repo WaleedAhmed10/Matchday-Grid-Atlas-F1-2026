@@ -9,12 +9,15 @@ export default function AuthModal({ isOpen, isSignUp, onClose, onToggleMode, onS
         <input
           type="text"
           placeholder="Username"
+          autoComplete="username"
           value={username}
           onChange={(e) => onUsernameChange(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && onSubmit()}
         />
         <input
           type="password"
-          placeholder="Password"
+          placeholder={isSignUp ? 'Password (min 6 characters)' : 'Password'}
+          autoComplete={isSignUp ? 'new-password' : 'current-password'}
           value={password}
           onChange={(e) => onPasswordChange(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && onSubmit()}

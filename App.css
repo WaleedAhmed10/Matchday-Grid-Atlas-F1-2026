@@ -459,4 +459,4 @@ body {
     .driver-grid { grid-template-columns: 1fr; }
     .footer-actions { flex-direction: column; align-items: stretch; }
     .toast-message { text-align: center; justify-content: center; }
-}
+}

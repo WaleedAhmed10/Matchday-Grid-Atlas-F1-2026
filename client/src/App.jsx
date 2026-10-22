@@ -32,7 +32,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const { toasts, showToast, removeToast } = useToast();
 
-  const loadPublicData = useCallback(async () => {
+  const loadPublicData = useCallback(async ({ silent = false } = {}) => {
     const results = await Promise.allSettled([
       api.getDrivers(),
       api.getRaces(),
@@ -49,9 +49,8 @@ export default function App() {
     const racesData = useFallbackRaces
       ? FALLBACK_RACES.map((race) => ({
         ...race,
-        status: new Date(`${race.date}T00:00:00`) < new Date(new Date().setHours(0, 0, 0, 0))
-          ? 'locked'
-          : 'upcoming'
+        // same rule as the server: predictions close when race day starts (00:00 UTC)
+        status: new Date(`${race.date}T00:00:00Z`) <= new Date() ? 'locked' : 'upcoming'
       }))
       : racesResult.value;
 
@@ -74,7 +73,7 @@ export default function App() {
         ? ['drivers', 'races', 'leaderboard', 'driver standings', 'constructor standings', 'simulation'][index]
         : null)
       .filter(Boolean);
-    if (failedResources.length) {
+    if (failedResources.length && !silent) {
       showToast(`Failed to load ${failedResources.join(', ')}${useFallbackRaces ? '; showing the season schedule instead' : ''}`, 'error');
     }
   }, [showToast]);
@@ -102,19 +101,53 @@ export default function App() {
     loadPredictions();
   }, [loadPredictions]);
 
+  // Keep points fresh: results are synced on the server after every GP, so the
+  // page re-reads standings/leaderboard every few minutes and when you come back to the tab.
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') {
+        loadPublicData({ silent: true });
+        loadPredictions();
+      }
+    };
+    const timer = setInterval(refresh, 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [loadPublicData, loadPredictions]);
+
+  // The saved token was rejected by the server (e.g. database was reset) -> sign out cleanly
+  useEffect(() => {
+    const onExpired = () => {
+      setUser(null);
+      setPredictions([]);
+      showToast('Your session expired. Please sign in again.', 'error');
+      setIsAuthModalOpen(true);
+    };
+    window.addEventListener('auth:expired', onExpired);
+    return () => window.removeEventListener('auth:expired', onExpired);
+  }, [showToast]);
+
   const handleAuth = async () => {
-    if (!authUsername || !authPassword) {
+    if (!authUsername.trim() || !authPassword) {
       showToast('Please fill in all fields', 'error');
+      return;
+    }
+    if (isSignUp && authPassword.length < 6) {
+      showToast('Password must be at least 6 characters', 'error');
       return;
     }
     setLoading(true);
     try {
       const data = isSignUp
-        ? await api.signup(authUsername, authPassword, authUsername)
-        : await api.signin(authUsername, authPassword);
+        ? await api.signup(authUsername.trim(), authPassword, authUsername.trim())
+        : await api.signin(authUsername.trim(), authPassword);
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       setUser(data.user);
+      setAuthPassword('');
       setIsAuthModalOpen(false);
       showToast(`Welcome ${data.user.displayName}!`, 'success');
       loadPublicData();
@@ -126,6 +159,7 @@ export default function App() {
   };
 
   const handleSignOut = () => {
+    api.signout().catch(() => {}); // invalidate the token on the server (best effort)
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
@@ -232,12 +266,14 @@ export default function App() {
 
       {activeTab === 'simulation' && <SimulationPanel simulation={simulation} />}
 
-      <div className="footer-actions">
-        <div className="footer-buttons">
-          <button className="btn-secondary" onClick={handleReset}><i className="fas fa-undo-alt" /> Reset</button>
-          <button className="btn-secondary" onClick={handleExport}><i className="fas fa-download" /> Export</button>
+      {user && (
+        <div className="footer-actions">
+          <div className="footer-buttons">
+            <button className="btn-secondary" onClick={handleReset}><i className="fas fa-undo-alt" /> Reset</button>
+            <button className="btn-secondary" onClick={handleExport}><i className="fas fa-download" /> Export</button>
+          </div>
         </div>
-      </div>
+      )}
 
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
@@ -255,4 +291,4 @@ export default function App() {
       />
     </div>
   );
-}
+}

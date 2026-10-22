@@ -15,8 +15,9 @@ async function withRetry(fn, retries = MAX_RETRIES) {
     try {
       return await fn();
     } catch (error) {
-      // Only retry on network errors, not on 4xx/5xx
-      if (attempt < retries - 1 && error.name === 'NetworkError') {
+      // fetch() rejects with a TypeError when the network/server is unreachable.
+      // Only that is retried (never 4xx/5xx responses, never an aborted request).
+      if (attempt < retries - 1 && error instanceof TypeError) {
         const delay = RETRY_DELAY * Math.pow(2, attempt);
         await new Promise((resolve) => setTimeout(resolve, delay));
         continue;
@@ -41,13 +42,15 @@ export async function apiCall(endpoint, options = {}) {
   const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
   try {
+    // Only GETs are retried: re-sending a POST/DELETE could apply it twice
+    const retries = (options.method || 'GET').toUpperCase() === 'GET' ? MAX_RETRIES : 1;
     const response = await withRetry(async () => {
       return await fetch(`${API_URL}${endpoint}`, {
         ...options,
         headers,
         signal: controller.signal
       });
-    });
+    }, retries);
 
     clearTimeout(timeoutId);
 
@@ -60,21 +63,30 @@ export async function apiCall(endpoint, options = {}) {
         errorData = { error: `HTTP ${response.status}` };
       }
 
-      const error = new Error(errorData.error || 'API request failed');
+      const error = new Error(errorData.error || errorData.data?.error || 'API request failed');
       error.statusCode = response.status;
       error.details = errorData.details;
 
-      // Handle specific status codes
-      if (response.status === 401) {
+      // A 401 on a normal request means the saved session is no longer valid:
+      // forget it and tell the app to show the signed-out state. (A 401 from
+      // sign-in itself just means "wrong username or password".)
+      if (response.status === 401 && !endpoint.startsWith('/auth/')) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        window.location.href = '/login';
+        window.dispatchEvent(new Event('auth:expired'));
+        error.message = 'Authentication required';
       }
 
       throw error;
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      // HTML instead of JSON = the request never reached the API server
+      throw new Error('The server returned an unexpected response. Check that the API is running and VITE_API_URL points to it.');
+    }
 
     // Handle success responses (with new format)
     if (data.success === false) {
@@ -90,6 +102,10 @@ export async function apiCall(endpoint, options = {}) {
 
     if (error.name === 'AbortError') {
       throw new Error('Request timeout - please try again');
+    }
+    if (error instanceof TypeError) {
+      // fetch() rejects with TypeError when the server can't be reached at all
+      throw new Error('Cannot reach the server. Check your connection and that the API is running.');
     }
 
     throw error;
@@ -154,8 +170,10 @@ export const api = {
   signin: (username, password) =>
     apiCall('/auth/signin', {
       method: 'POST',
-      body: JSON.stringify({ username, password })
+      // Lets an account created before passwords existed prove it is yours (old token in this browser)
+      body: JSON.stringify({ username, password, legacyToken: localStorage.getItem('token') || undefined })
     }),
+  signout: () => apiCall('/auth/signout', { method: 'POST' }),
   me: () => apiCall('/auth/me'),
 
   // Export

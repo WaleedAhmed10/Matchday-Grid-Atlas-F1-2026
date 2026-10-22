@@ -1,24 +1,24 @@
 id,name,flag,date,circuit
 0,Australian GP,🇦🇺,2026-03-08,Albert Park
-1,Chinese GP,🇨🇳,2026-03-22,Shanghai
-2,Japanese GP,🇯🇵,2026-04-05,Suzuka
-3,Bahrain GP,🇧🇭,2026-04-19,Sakhir
-4,Saudi Arabian GP,🇸🇦,2026-05-03,Jeddah
-5,Miami GP,🇺🇸,2026-05-17,Miami
-6,Monaco GP,🇲🇨,2026-05-31,Monte Carlo
-7,Spanish GP,🇪🇸,2026-06-14,Barcelona
-8,Canadian GP,🇨🇦,2026-06-28,Montreal
-9,Austrian GP,🇦🇹,2026-07-12,Spielberg
-10,British GP,🇬🇧,2026-07-26,Silverstone
-11,Belgian GP,🇧🇪,2026-08-09,Spa
-12,Hungarian GP,🇭🇺,2026-08-23,Hungaroring
-13,Dutch GP,🇳🇱,2026-09-06,Zandvoort
-14,Italian GP,🇮🇹,2026-09-13,Monza
-15,Azerbaijan GP,🇦🇿,2026-09-27,Baku
+1,Chinese GP,🇨🇳,2026-03-15,Shanghai
+2,Japanese GP,🇯🇵,2026-03-29,Suzuka
+3,Spanish GP,🇪🇸,2026-09-13,Madrid
+4,Bahrain GP in Malaysia,🇲🇾,2026-10-04,Kuala Lumpur
+5,Miami GP,🇺🇸,2026-05-03,Miami
+6,Monaco GP,🇲🇨,2026-06-07,Monte Carlo
+7,Barcelona GP,🇪🇸,2026-06-14,Barcelona
+8,Canadian GP,🇨🇦,2026-05-24,Montreal
+9,Austrian GP,🇦🇹,2026-06-28,Spielberg
+10,British GP,🇬🇧,2026-07-05,Silverstone
+11,Belgian GP,🇧🇪,2026-07-19,Spa
+12,Hungarian GP,🇭🇺,2026-07-26,Hungaroring
+13,Dutch GP,🇳🇱,2026-08-23,Zandvoort
+14,Italian GP,🇮🇹,2026-09-06,Monza
+15,Azerbaijan GP,🇦🇿,2026-09-26,Baku
 16,Singapore GP,🇸🇬,2026-10-11,Marina Bay
 17,United States GP,🇺🇸,2026-10-25,COTA
 18,Mexican GP,🇲🇽,2026-11-01,Mexico City
-19,Brazilian GP,🇧🇷,2026-11-15,Interlagos
+19,Brazilian GP,🇧🇷,2026-11-08,Interlagos
 20,Las Vegas GP,🇺🇸,2026-11-22,Las Vegas
-21,Qatar GP,🇶🇦,2026-12-06,Lusail
-22,Abu Dhabi GP,🇦🇪,2026-12-13,Yas Marina
+21,Qatar GP,🇶🇦,2026-11-29,Lusail
+22,Abu Dhabi GP,🇦🇪,2026-12-06,Yas Marina

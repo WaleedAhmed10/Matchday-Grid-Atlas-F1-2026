@@ -2,6 +2,7 @@
  * Data analytics and insights module
  * Provides statistical analysis and performance metrics
  */
+const { getPointsForPosition, getSprintPointsForPosition } = require('./f1Points');
 
 /**
  * Calculate driver statistics
@@ -35,17 +36,19 @@ function calculateDriverStats(driver, raceResults) {
 
       if (finishPosition === 1) stats.wins++;
       if (finishPosition <= 3) stats.podiums++;
-      if (finishPosition <= 10) {
-        const points = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1][position];
-        stats.points += points;
-      }
+      stats.points += getPointsForPosition(finishPosition);
 
       stats.bestFinish = Math.min(stats.bestFinish, finishPosition);
       stats.worstFinish = Math.max(stats.worstFinish, finishPosition);
-    } else if (stats.racesCompleted < raceResults.length) {
-      stats.retirements++;
+    } else {
+      stats.retirements++; // not classified in this race
     }
+
+    const sprintPosition = (result.sprintOrder || []).indexOf(driver.id);
+    if (sprintPosition !== -1) stats.points += getSprintPointsForPosition(sprintPosition + 1);
   });
+
+  if (stats.racesCompleted === 0) stats.bestFinish = null;
 
   if (stats.racesCompleted > 0) {
     stats.averageFinishPosition = Math.round((totalPosition / stats.racesCompleted) * 100) / 100;
@@ -96,21 +99,21 @@ function calculateTeamStats(team, drivers, raceResults) {
     averagePoints: 0
   };
 
+  const teamIds = new Set(teamDrivers.map((d) => d.id));
+
   raceResults.forEach((result) => {
-    let teamPoints = 0;
+    let entered = false;
     result.finishingOrder.forEach((driverId, position) => {
-      const driver = drivers.find((d) => d.id === driverId);
-      if (driver && driver.team === team) {
-        if (position <= 9) {
-          const points = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1][position];
-          teamPoints += points;
-          stats.points += points;
-        }
-        if (position === 0) stats.wins++;
-        if (position <= 2) stats.podiums++;
-      }
+      if (!teamIds.has(driverId)) return;
+      entered = true;
+      stats.points += getPointsForPosition(position + 1);
+      if (position === 0) stats.wins++;
+      if (position <= 2) stats.podiums++;
     });
-    if (teamPoints > 0) stats.racesCompleted++;
+    (result.sprintOrder || []).forEach((driverId, position) => {
+      if (teamIds.has(driverId)) stats.points += getSprintPointsForPosition(position + 1);
+    });
+    if (entered) stats.racesCompleted++;
   });
 
   if (stats.racesCompleted > 0) {
@@ -171,36 +174,18 @@ function findDriverStreaks(driver, raceResults) {
     longestPointsStreak: 0
   };
 
-  let currentWins = 0;
-  let currentPodiums = 0;
-  let currentPoints = 0;
+  // Each streak is the run of consecutive races (up to the latest) meeting the condition;
+  // it resets to 0 as soon as one race breaks it.
+  const track = (key, hit) => {
+    streaks[`current${key}Streak`] = hit ? streaks[`current${key}Streak`] + 1 : 0;
+    streaks[`longest${key}Streak`] = Math.max(streaks[`longest${key}Streak`], streaks[`current${key}Streak`]);
+  };
 
   raceResults.forEach((result) => {
     const position = result.finishingOrder.indexOf(driver.id);
-
-    if (position === 0) {
-      currentWins++;
-      streaks.currentWinStreak = currentWins;
-      streaks.longestWinStreak = Math.max(streaks.longestWinStreak, currentWins);
-      currentPodiums++;
-      currentPoints++;
-    } else if (position > 0 && position <= 2) {
-      currentWins = 0;
-      currentPodiums++;
-      streaks.currentPodiumStreak = currentPodiums;
-      streaks.longestPodiumStreak = Math.max(streaks.longestPodiumStreak, currentPodiums);
-      currentPoints++;
-    } else if (position > 2 && position <= 9) {
-      currentWins = 0;
-      currentPodiums = 0;
-      currentPoints++;
-      streaks.currentPointsStreak = currentPoints;
-      streaks.longestPointsStreak = Math.max(streaks.longestPointsStreak, currentPoints);
-    } else {
-      currentWins = 0;
-      currentPodiums = 0;
-      currentPoints = 0;
-    }
+    track('Win', position === 0);
+    track('Podium', position !== -1 && position <= 2);
+    track('Points', position !== -1 && position <= 9);
   });
 
   return streaks;
