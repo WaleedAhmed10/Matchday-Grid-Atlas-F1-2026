@@ -1,5 +1,4 @@
 module.exports = {
-  JWT_SECRET: process.env.JWT_SECRET || 'f1predictor2026secret',
   PORT: process.env.PORT || 5000,
   POINTS: {
     PARTICIPATION: 5,

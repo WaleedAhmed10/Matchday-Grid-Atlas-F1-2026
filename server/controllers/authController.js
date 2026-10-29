@@ -8,10 +8,13 @@ const {
 } = require('../middleware/errorHandler');
 const { sendSuccess } = require('../utils/response');
 const { hashPassword, verifyPassword } = require('../utils/password');
-const { createSessionToken, isExpired, safeEqual, MAX_SESSIONS } = require('../utils/session');
+const { createSessionToken, safeEqual, MAX_SESSIONS, SESSION_TTL_MS } = require('../utils/session');
 
 const MIN_PASSWORD = 6;
 const MAX_PASSWORD = 128; // scrypt cost grows with input size, so cap it
+const MAX_DISPLAY_NAME = 30;
+// Used to spend the same time on unknown usernames as on real ones (no username probing by timing)
+const DUMMY_HASH = 'scrypt$00000000000000000000000000000000$' + '00'.repeat(64);
 
 // Usernames are matched case-insensitively ("Max" and "max" are the same person).
 const findByUsername = (username) =>
@@ -34,11 +37,28 @@ function validatePassword(password) {
 
 const publicUser = (user) => ({ username: user.username, displayName: user.displayName });
 
-/** Start a session for this device; returns the (unhashed) token for the client. */
+/**
+ * Start a session for a NEW (unsaved) user document; returns the (unhashed) token.
+ */
 function startSession(user) {
   const { token, hash } = createSessionToken();
-  const live = (user.sessions || []).filter((s) => !isExpired(s));
-  user.sessions = [...live.slice(-(MAX_SESSIONS - 1)), { hash, createdAt: new Date() }];
+  user.sessions = [{ hash, createdAt: new Date() }];
+  return token;
+}
+
+/**
+ * Add a session to an existing user with one atomic update, so two sign-ins at the same
+ * moment (two devices) cannot overwrite each other or fail with a version conflict.
+ * Expired sessions are dropped first, then only the newest MAX_SESSIONS are kept.
+ */
+async function addSession(user) {
+  const { token, hash } = createSessionToken();
+  const cutoff = new Date(Date.now() - SESSION_TTL_MS);
+  await User.updateOne({ _id: user._id }, { $pull: { sessions: { createdAt: { $lt: cutoff } } } });
+  await User.updateOne(
+    { _id: user._id },
+    { $push: { sessions: { $each: [{ hash, createdAt: new Date() }], $slice: -MAX_SESSIONS } } }
+  );
   return token;
 }
 
@@ -47,7 +67,8 @@ function startSession(user) {
  */
 exports.signup = asyncHandler(async (req, res) => {
   const { username, password } = cleanCredentials(req.body);
-  const displayName = (typeof req.body.displayName === 'string' && req.body.displayName.trim()) || username;
+  const rawDisplay = typeof req.body.displayName === 'string' ? req.body.displayName.trim() : '';
+  const displayName = (rawDisplay || username).slice(0, MAX_DISPLAY_NAME);
 
   if (username.length < 3) {
     throw new ValidationError('Username must be at least 3 characters');
@@ -92,6 +113,7 @@ exports.signin = asyncHandler(async (req, res) => {
 
   const user = await findByUsername(username);
   if (!user) {
+    await verifyPassword(password, DUMMY_HASH);
     throw new AuthenticationError('Invalid username or password');
   }
 
@@ -115,8 +137,8 @@ exports.signin = asyncHandler(async (req, res) => {
     throw new AuthenticationError('Invalid username or password');
   }
 
-  const token = startSession(user);
-  await user.save();
+  if (user.isModified()) await user.save();
+  const token = await addSession(user);
 
   sendSuccess(res, { token, user: publicUser(user) }, message);
 });

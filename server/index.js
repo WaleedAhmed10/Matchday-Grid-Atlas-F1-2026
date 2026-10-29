@@ -45,7 +45,7 @@ app.use(apiRateLimit());
 
 // Health check endpoint
 app.get('/api/health', asyncHandler((req, res) => {
-  res.json({ status: 'ok', service: 'F1 2026 GP Season Calculator', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', service: 'Matchday Atlas Grid', timestamp: new Date().toISOString() });
 }));
 
 // API Routes

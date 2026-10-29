@@ -93,7 +93,15 @@ export default function App() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
-    if (token && savedUser) setUser(JSON.parse(savedUser));
+    if (token && savedUser) {
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch {
+        // Corrupted saved login: forget it instead of crashing the whole page
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+    }
     loadPublicData();
   }, [loadPublicData]);
 
@@ -291,4 +299,4 @@ export default function App() {
       />
     </div>
   );
-}
+}

@@ -1,7 +1,7 @@
 {
-  "name": "f1-predictor-server",
+  "name": "matchday-atlas-grid-server",
   "version": "1.0.0",
-  "description": "F1 2026 GP Season Calculator - Express API",
+  "description": "Matchday Atlas Grid - Express API",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

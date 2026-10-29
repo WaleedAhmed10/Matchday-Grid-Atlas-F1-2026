@@ -1,4 +1,7 @@
-# F1 2026 Prediction Game
+# Matchday Atlas Grid
+
+F1 2026 predictor, part of the **Matchday Atlas** family (sister app: Matchday Atlas Cup for the World Cup). Unofficial fan project, not affiliated with Formula 1 or the FIA.
+
 
 A full-stack web app for predicting Formula 1 2026 race outcomes and championship standings, with a weighted prediction model and Monte Carlo championship simulation.
 
@@ -31,7 +34,7 @@ Auth: username + password (hashed with Node's built-in scrypt, no extra dependen
 ## Project Structure
 
 ```
-F1-2026-GP-Season-Calculator/
+Matchday-Atlas-Grid/
 ├── server/     Backend (Node.js/Express)
 ├── client/     Frontend (React)
 └── README.md
