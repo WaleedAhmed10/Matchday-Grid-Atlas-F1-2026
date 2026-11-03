@@ -39,7 +39,8 @@ export async function apiCall(endpoint, options = {}) {
   };
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+  // Free hosts can take a minute to wake up, so sign-in/sign-up get a longer timeout
+  const timeoutId = setTimeout(() => controller.abort(), endpoint.startsWith('/auth/') ? 75000 : 30000);
 
   try {
     // Only GETs are retried: re-sending a POST/DELETE could apply it twice
@@ -101,7 +102,7 @@ export async function apiCall(endpoint, options = {}) {
     clearTimeout(timeoutId);
 
     if (error.name === 'AbortError') {
-      throw new Error('Request timeout - please try again');
+      throw new Error('The server is taking too long to respond (it may be waking up). Please try again in a moment.');
     }
     if (error instanceof TypeError) {
       // fetch() rejects with TypeError when the server can't be reached at all

@@ -1,9 +1,9 @@
-export default function MyPredictions({ predictions, races }) {
+export default function MyPredictions({ predictions, races, isGuest }) {
   return (
     <div className="card">
       <div className="card-title">
         <i className="fas fa-list-ul" /> My predictions
-        <span className="badge-pill">{predictions.length} this season</span>
+        <span className="badge-pill">{isGuest ? `guest · ${predictions.length}` : `${predictions.length} this season`}</span>
       </div>
       <div className="prediction-list">
         {predictions.length === 0 ? (

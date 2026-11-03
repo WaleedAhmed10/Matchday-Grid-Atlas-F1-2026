@@ -46,6 +46,24 @@ class RateLimiter {
   }
 
   /**
+   * Count the recent hits for a key without recording a new one
+   */
+  count(key, windowMs) {
+    const windowStart = Date.now() - windowMs;
+    const recent = (this.requests.get(key) || []).filter((t) => t > windowStart);
+    this.requests.set(key, recent);
+    return { count: recent.length, oldest: recent.length ? Math.min(...recent) : 0 };
+  }
+
+  /**
+   * Record one hit for a key
+   */
+  record(key) {
+    if (!this.requests.has(key)) this.requests.set(key, []);
+    this.requests.get(key).push(Date.now());
+  }
+
+  /**
    * Cleanup old entries
    */
   cleanup() {
@@ -94,11 +112,23 @@ function rateLimitMiddleware(limit = 100, windowMs = 60000, scope = 'api') {
 }
 
 /**
- * Strict rate limiting for auth endpoints
- * 10 attempts per minute per IP (separate bucket from the general API limit)
+ * Rate limiting for auth endpoints: only FAILED attempts count (wrong password, name taken...),
+ * so signing in successfully never uses up your allowance. 10 failures per 5 minutes per IP.
  */
-function authRateLimit() {
-  return rateLimitMiddleware(10, 60000, 'auth');
+function authRateLimit(limit = 10, windowMs = 5 * 60 * 1000) {
+  return (req, res, next) => {
+    const key = `auth-fail:${limiter.getKey(req)}`;
+    const { count, oldest } = limiter.count(key, windowMs);
+    if (count >= limit) {
+      const retryAfter = Math.max(1, Math.ceil((oldest + windowMs - Date.now()) / 1000));
+      res.set('Retry-After', retryAfter);
+      throw new RateLimitError(retryAfter);
+    }
+    res.on('finish', () => {
+      if (res.statusCode >= 400 && res.statusCode !== 429) limiter.record(key);
+    });
+    next();
+  };
 }
 
 /**

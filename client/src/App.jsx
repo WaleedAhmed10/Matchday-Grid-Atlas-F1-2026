@@ -10,6 +10,10 @@ import SimulationPanel from './components/SimulationPanel';
 import MyPredictions from './components/MyPredictions';
 import { FALLBACK_DRIVERS } from './data/drivers';
 import { FALLBACK_RACES } from './data/races';
+<<<<<<< Updated upstream
+=======
+import { readGuestPicks, writeGuestPicks } from './utils/guestStore';
+>>>>>>> Stashed changes
 
 const TABS = ['predict', 'standings', 'simulation'];
 
@@ -17,6 +21,11 @@ export default function App() {
   const [drivers, setDrivers] = useState([]);
   const [races, setRaces] = useState([]);
   const [predictions, setPredictions] = useState([]);
+<<<<<<< Updated upstream
+=======
+  const [guestPicks, setGuestPicks] = useState(readGuestPicks);
+  const [authError, setAuthError] = useState('');
+>>>>>>> Stashed changes
   const [leaderboard, setLeaderboard] = useState([]);
   const [driverStandings, setDriverStandings] = useState([]);
   const [constructorStandings, setConstructorStandings] = useState([]);
@@ -32,6 +41,18 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const { toasts, showToast, removeToast } = useToast();
 
+<<<<<<< Updated upstream
+=======
+  // Signed in: the server's predictions. Guest: the picks saved in this browser.
+  const shownPredictions = user
+    ? predictions
+    : Object.entries(guestPicks).map(([raceId, driverId]) => ({
+      raceId: Number(raceId),
+      driverId,
+      driverCode: drivers.find((d) => d.id === driverId)?.code
+    }));
+
+>>>>>>> Stashed changes
   const loadPublicData = useCallback(async ({ silent = false } = {}) => {
     const results = await Promise.allSettled([
       api.getDrivers(),
@@ -138,6 +159,7 @@ export default function App() {
     return () => window.removeEventListener('auth:expired', onExpired);
   }, [showToast]);
 
+<<<<<<< Updated upstream
   const handleAuth = async () => {
     if (!authUsername.trim() || !authPassword) {
       showToast('Please fill in all fields', 'error');
@@ -145,6 +167,37 @@ export default function App() {
     }
     if (isSignUp && authPassword.length < 6) {
       showToast('Password must be at least 6 characters', 'error');
+=======
+  // Move picks made as a guest into the account that was just signed in to
+  // (races that already have a saved prediction, or have closed, are left alone).
+  const importGuestPicks = async () => {
+    const picks = Object.entries(readGuestPicks());
+    if (!picks.length) return 0;
+    let existing = [];
+    try {
+      existing = (await api.getUserPredictions()).map((p) => p.raceId);
+    } catch {
+      return 0; // keep the guest picks; they can be moved next time
+    }
+    const results = await Promise.allSettled(
+      picks
+        .filter(([raceId]) => !existing.includes(Number(raceId)))
+        .map(([raceId, driverId]) => api.submitPrediction(Number(raceId), driverId))
+    );
+    writeGuestPicks({});
+    setGuestPicks({});
+    return results.filter((r) => r.status === 'fulfilled').length;
+  };
+
+  const handleAuth = async () => {
+    setAuthError('');
+    if (!authUsername.trim() || !authPassword) {
+      setAuthError('Please enter a username and password');
+      return;
+    }
+    if (isSignUp && authPassword.length < 6) {
+      setAuthError('Password must be at least 6 characters');
+>>>>>>> Stashed changes
       return;
     }
     setLoading(true);
@@ -157,15 +210,35 @@ export default function App() {
       setUser(data.user);
       setAuthPassword('');
       setIsAuthModalOpen(false);
+<<<<<<< Updated upstream
       showToast(`Welcome ${data.user.displayName}!`, 'success');
       loadPublicData();
       loadPredictions();
     } catch (err) {
       showToast(err.message, 'error');
+=======
+      const moved = await importGuestPicks();
+      showToast(
+        moved ? `Welcome ${data.user.displayName}! ${moved} guest prediction${moved > 1 ? 's' : ''} added to your account.` : `Welcome ${data.user.displayName}!`,
+        'success'
+      );
+      loadPublicData();
+      loadPredictions();
+    } catch (err) {
+      setAuthError(err.message);
+>>>>>>> Stashed changes
     }
     setLoading(false);
   };
 
+<<<<<<< Updated upstream
+=======
+  const openAuth = () => {
+    setAuthError('');
+    setIsAuthModalOpen(true);
+  };
+
+>>>>>>> Stashed changes
   const handleSignOut = () => {
     api.signout().catch(() => {}); // invalidate the token on the server (best effort)
     localStorage.removeItem('token');
@@ -177,8 +250,22 @@ export default function App() {
 
   const handleSubmitPrediction = async () => {
     if (!user) {
+<<<<<<< Updated upstream
       showToast('Please sign in first', 'error');
       setIsAuthModalOpen(true);
+=======
+      // Guest mode: keep the pick in this browser
+      const race = races.find((r) => r.id === selectedRace);
+      if (!race || race.status !== 'upcoming') {
+        showToast('Predictions are closed for this race', 'error');
+        return;
+      }
+      const updated = guestPicks[selectedRace] !== undefined;
+      const next = { ...guestPicks, [selectedRace]: selectedDriver };
+      setGuestPicks(next);
+      writeGuestPicks(next);
+      showToast(`Prediction ${updated ? 'updated' : 'saved'} on this device. Sign in to score points and join the leaderboard.`, 'success');
+>>>>>>> Stashed changes
       return;
     }
     setLoading(true);
@@ -194,7 +281,17 @@ export default function App() {
   };
 
   const handleReset = async () => {
+<<<<<<< Updated upstream
     if (!user || !window.confirm('Reset all your predictions?')) return;
+=======
+    if (!window.confirm(user ? 'Reset all your predictions?' : 'Clear your guest predictions from this device?')) return;
+    if (!user) {
+      setGuestPicks({});
+      writeGuestPicks({});
+      showToast('Guest predictions cleared', 'info');
+      return;
+    }
+>>>>>>> Stashed changes
     setLoading(true);
     try {
       const data = await api.deletePredictions();
@@ -208,12 +305,19 @@ export default function App() {
   };
 
   const handleExport = async () => {
+<<<<<<< Updated upstream
     if (!user) {
       showToast('Please sign in to export', 'error');
       return;
     }
     try {
       const data = await api.exportData();
+=======
+    try {
+      const data = user
+        ? await api.exportData()
+        : { guest: true, exportedAt: new Date().toISOString(), predictions: shownPredictions };
+>>>>>>> Stashed changes
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -231,7 +335,11 @@ export default function App() {
     <div className="app-container">
       <Header
         user={user}
+<<<<<<< Updated upstream
         onAuthClick={() => setIsAuthModalOpen(true)}
+=======
+        onAuthClick={openAuth}
+>>>>>>> Stashed changes
         onSignOut={handleSignOut}
       />
 
@@ -261,10 +369,19 @@ export default function App() {
               onDriverSelect={setSelectedDriver}
               onSubmit={handleSubmitPrediction}
               loading={loading}
+<<<<<<< Updated upstream
             />
             <LeaderboardPanel leaderboard={leaderboard} user={user} onRefresh={loadPublicData} />
           </div>
           <MyPredictions predictions={predictions} races={races} />
+=======
+              isGuest={!user}
+              onSignIn={openAuth}
+            />
+            <LeaderboardPanel leaderboard={leaderboard} user={user} onRefresh={loadPublicData} />
+          </div>
+          <MyPredictions predictions={shownPredictions} races={races} isGuest={!user} />
+>>>>>>> Stashed changes
         </>
       )}
 
@@ -274,7 +391,11 @@ export default function App() {
 
       {activeTab === 'simulation' && <SimulationPanel simulation={simulation} />}
 
+<<<<<<< Updated upstream
       {user && (
+=======
+      {(user || shownPredictions.length > 0) && (
+>>>>>>> Stashed changes
         <div className="footer-actions">
           <div className="footer-buttons">
             <button className="btn-secondary" onClick={handleReset}><i className="fas fa-undo-alt" /> Reset</button>
@@ -289,7 +410,12 @@ export default function App() {
         isOpen={isAuthModalOpen}
         isSignUp={isSignUp}
         onClose={() => setIsAuthModalOpen(false)}
+<<<<<<< Updated upstream
         onToggleMode={() => setIsSignUp(!isSignUp)}
+=======
+        onToggleMode={() => { setIsSignUp(!isSignUp); setAuthError(''); }}
+        error={authError}
+>>>>>>> Stashed changes
         onSubmit={handleAuth}
         loading={loading}
         username={authUsername}

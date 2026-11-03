@@ -1,4 +1,4 @@
-export default function AuthModal({ isOpen, isSignUp, onClose, onToggleMode, onSubmit, loading, username, password, onUsernameChange, onPasswordChange }) {
+export default function AuthModal({ isOpen, isSignUp, onClose, onToggleMode, onSubmit, loading, error, username, password, onUsernameChange, onPasswordChange }) {
   if (!isOpen) return null;
 
   return (
@@ -6,6 +6,7 @@ export default function AuthModal({ isOpen, isSignUp, onClose, onToggleMode, onS
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <button className="close-modal" onClick={onClose}>&times;</button>
         <h2>{isSignUp ? 'Sign Up' : 'Sign In'}</h2>
+        {error && <div className="auth-error" role="alert">{error}</div>}
         <input
           type="text"
           placeholder="Username"
@@ -28,6 +29,7 @@ export default function AuthModal({ isOpen, isSignUp, onClose, onToggleMode, onS
         <button className="btn-secondary" onClick={onToggleMode}>
           {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
         </button>
+        <button className="link-btn guest-btn" onClick={onClose}>Continue as guest</button>
       </div>
     </div>
   );

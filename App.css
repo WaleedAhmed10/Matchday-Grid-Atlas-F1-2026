@@ -530,3 +530,15 @@ body {
 .sim-bar-fill { height: 100%; background: #c8f169; border-radius: 999px; }
 .sim-pct { text-align: right; font-weight: 700; color: #c8f169; }
 @media (max-width: 600px) { .sim-row { grid-template-columns: 1fr 52px; } .sim-bar-track { grid-column: 1 / -1; grid-row: 2; } }
+<<<<<<< Updated upstream
+=======
+
+.auth-error {
+    background: #3a1f1f; border: 1px solid #7a3b3b; color: #ffb4b4;
+    border-radius: 14px; padding: 0.6rem 0.9rem; margin-bottom: 0.8rem; font-size: 0.85rem;
+}
+.guest-note { margin-top: 1rem; font-size: 0.82rem; color: #9bab9d; line-height: 1.5; }
+.guest-note i { color: #c8f169; margin-right: 0.3rem; }
+.link-btn { background: none; border: none; padding: 0; font: inherit; color: #c8f169; text-decoration: underline; cursor: pointer; }
+.guest-btn { display: block; margin: 0.9rem auto 0; font-size: 0.85rem; }
+>>>>>>> Stashed changes

@@ -6,7 +6,9 @@ export default function PredictionPanel({
   onRaceChange,
   onDriverSelect,
   onSubmit,
-  loading
+  loading,
+  isGuest,
+  onSignIn
 }) {
   const currentRace = races.find((r) => r.id === selectedRace);
   const isLocked = currentRace?.status === 'locked' || currentRace?.status === 'completed';
@@ -64,8 +66,14 @@ export default function PredictionPanel({
         ))}
       </div>
       <button className="btn-primary" onClick={onSubmit} disabled={loading || !currentRace || isLocked}>
-        {loading ? <span className="loading-spinner" /> : <><i className="fas fa-check-circle" /> Submit prediction</>}
+        {loading ? <span className="loading-spinner" /> : <><i className="fas fa-check-circle" /> {isGuest ? 'Save prediction (guest)' : 'Submit prediction'}</>}
       </button>
+      {isGuest && (
+        <p className="guest-note">
+          <i className="fas fa-user" /> Playing as a guest: picks are saved on this device only.{' '}
+          <button type="button" className="link-btn" onClick={onSignIn}>Sign in</button> to score points and join the leaderboard.
+        </p>
+      )}
       <div className="prediction-rules">
         <span><i className="fas fa-clock" /> Deadline: race start</span>
         <span><i className="fas fa-star" style={{ color: '#facc15' }} /> 25 pts correct winner</span>

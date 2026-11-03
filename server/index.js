@@ -25,9 +25,14 @@ const { recalculateLeaderboard } = require('./services/leaderboardService');
 
 const app = express();
 
-// Behind a reverse proxy (Render, Railway, Heroku, nginx...) set TRUST_PROXY=1 so the
-// rate limiter sees the real client IP instead of the proxy's.
-if (process.env.TRUST_PROXY) app.set('trust proxy', Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
+// Behind a reverse proxy (Render, Railway, Heroku, nginx...) the rate limiter must see the real
+// client IP, otherwise every visitor shares ONE limit and sign-in starts failing for everybody.
+// In production one proxy hop is trusted by default; set TRUST_PROXY=0 to turn that off,
+// or TRUST_PROXY=<hops> / an address list for other setups.
+const trustProxy = process.env.TRUST_PROXY ?? (process.env.NODE_ENV === 'production' ? '1' : '');
+if (trustProxy && !['0', 'false'].includes(trustProxy.toLowerCase())) {
+  app.set('trust proxy', Number(trustProxy) || trustProxy);
+}
 
 // Middleware setup
 app.use(cors());
